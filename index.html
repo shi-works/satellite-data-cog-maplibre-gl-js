@@ -1,0 +1,297 @@
+<html>
+
+<head>
+    <title>COG on MapLibre GL JS</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src='https://unpkg.com/maplibre-gl@3.0.1/dist/maplibre-gl.js'></script>
+    <link href='https://unpkg.com/maplibre-gl@3.0.1/dist/maplibre-gl.css' rel='stylesheet' />
+    <script src="https://cdn.jsdelivr.net/npm/geotiff"></script>
+    <link href="maplibre-gl-compare.css" rel='stylesheet' />
+    <script src="maplibre-gl-compare.js"></script>
+    <script>
+        console.log(GeoTIFF);
+    </script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <style>
+        body {
+            overflow: hidden;
+        }
+
+        body * {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        .map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        .map-overlay {
+            font: bold 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+            position: absolute;
+            width: 220px;
+            bottom: 20px;
+            left: 0;
+            padding: 10px;
+        }
+
+        .map-overlay .map-overlay-inner {
+            background-color: #fff;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+            border-radius: 3px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .map-overlay label {
+            display: block;
+            margin: 0 0 0px;
+            font-size: 12px;
+            top: 100px;
+            left: 10px;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .map-overlay input {
+            background-color: transparent;
+            display: inline-block;
+            width: 100%;
+            position: relative;
+            margin: 0;
+            cursor: ew-resize;
+        }
+    </style>
+    <div id="comparison-container">
+        <div id="before" class="map"></div>
+        <div id="after" class="map"></div>
+    </div>
+    <div class="map-overlay top">
+        <div class="map-overlay-inner">
+            <label>衛星画像(GeoTiff) 不透明度: <span id="slider-opacity-value">100%</span></label>
+            <input id="slider-opacity" type="range" min="0" max="100" step="0" value="100">
+        </div>
+    </div>
+    <script type="module">
+        // 'GeoTIFF'パッケージから 'fromUrl' と 'Pool' 関数をインポート
+        const { fromUrl, Pool } = GeoTIFF;
+
+        // 'fast-png'パッケージから'encode'関数をインポートします。これは画像データをPNG形式にエンコードするために使用されます。
+        import { encode as fastPngEncode } from 'https://cdn.jsdelivr.net/npm/fast-png@6.1.0/+esm';
+
+        // タイルのx/y/z座標をWebメルカトルの境界ボックスに変換する関数を定義
+        const merc = (x, y, z) => {
+            const GEO_R = 6378137;
+            const orgX = -1 * ((2 * GEO_R * Math.PI) / 2);
+            const orgY = (2 * GEO_R * Math.PI) / 2;
+            const unit = (2 * GEO_R * Math.PI) / Math.pow(2, z);
+            const minx = orgX + x * unit;
+            const maxx = orgX + (x + 1) * unit;
+            const miny = orgY - (y + 1) * unit;
+            const maxy = orgY - y * unit;
+            return [minx, miny, maxx, maxy];
+        };
+
+        // Cloud Optimized GeoTIFF(COG)ソースを生成する非同期関数を定義
+        const generateCogSource = async (url, protocolName) => {
+            // GeoTIFFから指定されたURLの画像を読み込み
+            const tiff = await fromUrl(url);
+            // GeoTIFF画像から基本的な情報を取得
+            const image = await tiff.getImage();
+            const bandCount = image.getFileDirectory().SamplesPerPixel;
+            console.log('Number of bands: ' + bandCount);
+            const bboxTiff = image.getBoundingBox();
+            const pool = new Pool();
+            maplibregl.addProtocol(protocolName, (params, callback) => {
+                const segments = params.url.split('/');
+                console.log('segments:' + segments);
+                // タイルインデックスの取得
+                const [z, x, y] = segments.slice(segments.length - 3).map(Number);
+                console.log('[z, x, y]:' + [z, x, y]);
+                // webmercator-bboxを取得
+                const bbox = merc(x, y, z);
+                console.log('bbox:' + bbox)
+                const size = 256;
+                console.log('size:' + size);
+                // GeoTIFFから特定の境界ボックス(bbox)内のラスターデータを読み込み
+                tiff.readRasters({
+                    bbox,
+                    samples: [0, 1, 2, 3], // 4つのバンド（赤、緑、青、アルファ）を取得する
+                    width: size,  // 読み込む画像のサイズを指定
+                    height: size, // 読み込む画像のサイズを指定
+                    interleave: true, // バンドを交互に読み込む
+                    pool, // 並列処理のためのワーカープールを指定
+                }).then((data) => {
+                    const img = new ImageData(
+                        //@ts-ignore
+                        new Uint8ClampedArray(data),
+                        size,
+                        size,
+                    );
+                    // imgデータをPNG形式にエンコード
+                    const png = fastPngEncode(img);
+                    // console.log('png:' + png)
+                    callback(null, png, null, null);
+                });
+                return { cancel: () => { } };
+            });
+
+            // RasterSourceSpecificationに対応するソースオブジェクトを生成
+            const source = {
+                type: 'raster',
+                tiles: [`${protocolName}://${url.split('://')[1]}/{z}/{x}/{y}`],
+                tileSize: 256,
+                minzoom: 2,
+                maxzoom: 18,
+                attribution: '<a href="https://apps.sentinel-hub.com/eo-browser/">© Sentinel Hub</a>'
+            };
+
+            return { source };
+        };
+
+        // マップを初期化
+        const beforeMap = new maplibregl.Map({
+            container: 'before',
+            style: 'https://tile2.openstreetmap.jp/styles/osm-bright/style.json',
+            hash: true,
+            zoom: 9.94,
+            center: [32.8341, 46.6007],
+            pitch: 0,
+            bearing: 0,
+            attributionControl: false,
+        });
+
+        // マップのロードが完了したら、COGソースを生成しレイヤーに追加
+        beforeMap.on('load', async () => {
+            const { source } = await generateCogSource(
+                './2023-06-01-00_00_2023-06-01-23_59_Landsat_8-9_L1_True_color_-_pansharpened_cog.tif',
+                'cog-before'
+            );
+            beforeMap.addSource('cogSample-before', source);
+            beforeMap.addLayer({
+                id: 'cogLayer-before',
+                type: 'raster',
+                source: 'cogSample-before',
+                paint: {
+                    'raster-opacity': 1.0,
+                }
+            });
+
+            // スライダーでCOGタイルの不透明度を制御
+            const sliderOpactiy = document.getElementById('slider-opacity');
+            const sliderOpactiyValue = document.getElementById('slider-opacity-value');
+
+            sliderOpactiy.addEventListener('input', (e) => {
+                beforeMap.setPaintProperty(
+                    'cogLayer-before',
+                    'raster-opacity',
+                    parseInt(e.target.value, 10) / 100
+                );
+                sliderOpactiyValue.textContent = e.target.value + '%';
+            });
+
+        });
+
+        // スケール表示
+        beforeMap.addControl(new maplibregl.ScaleControl({
+            maxWidth: 200,
+            unit: 'metric'
+        }));
+
+        // マップを初期化
+        const afterMap = new maplibregl.Map({
+            container: 'after',
+            style: 'https://tile2.openstreetmap.jp/styles/osm-bright/style.json',
+            hash: true,
+            zoom: 17,
+            center: [32.5805265, 46.6190051],
+            pitch: 0,
+            bearing: 0,
+            attributionControl: false,
+        });
+
+        // マップのロードが完了したら、COGソースを生成しレイヤーに追加
+        afterMap.on('load', async () => {
+            const { source } = await generateCogSource(
+                './2023-06-09-00_00_2023-06-09-23_59_Landsat_8-9_L1_True_color_-_pansharpened_cog.tif',
+                'cog-after'
+            );
+            afterMap.addSource('cogSample-after', source);
+            afterMap.addLayer({
+                id: 'cogLayer-after',
+                type: 'raster',
+                source: 'cogSample-after',
+                paint: {
+                    'raster-opacity': 1.0,
+                }
+            });
+
+            // スライダーでCOGタイルの不透明度を制御
+            const sliderOpactiy = document.getElementById('slider-opacity');
+            const sliderOpactiyValue = document.getElementById('slider-opacity-value');
+
+            sliderOpactiy.addEventListener('input', (e) => {
+                afterMap.setPaintProperty(
+                    'cogLayer-after',
+                    'raster-opacity',
+                    parseInt(e.target.value, 10) / 100
+                );
+                sliderOpactiyValue.textContent = e.target.value + '%';
+            });
+
+        });
+
+        // ズーム・回転
+        afterMap.addControl(new maplibregl.NavigationControl());
+
+        // フルスクリーンモードのオンオフ
+        afterMap.addControl(new maplibregl.FullscreenControl());
+
+        // 現在位置表示
+        afterMap.addControl(new maplibregl.GeolocateControl({
+            positionOptions: {
+                enableHighAccuracy: false
+            },
+            fitBoundsOptions: { maxZoom: 18 },
+            trackUserLocation: true,
+            showUserLocation: true
+        }));
+
+        // Attributionを折りたたみ表示
+        afterMap.addControl(new maplibregl.AttributionControl({
+            compact: true,
+            customAttribution: '（<a href="https://twitter.com/syanseto" target="_blank">Twitter</a> | <a href="https://github.com/shi-works/satellite-data-cog-maplibre-gl-js" target="_blank">Github</a>） '
+        }));
+
+        var container = "#comparison-container";
+        var map = new maplibregl.Compare(beforeMap, afterMap, container, {
+        });
+
+        // map.showTileBoundaries = true;
+
+    </script>
+</body>
+
+</html>
