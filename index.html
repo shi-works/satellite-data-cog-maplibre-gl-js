@@ -9,9 +9,6 @@
     <script src="https://cdn.jsdelivr.net/npm/geotiff"></script>
     <link href="maplibre-gl-compare.css" rel='stylesheet' />
     <script src="maplibre-gl-compare.js"></script>
-    <script>
-        console.log(GeoTIFF);
-    </script>
     <style>
         body {
             margin: 0;
@@ -98,7 +95,7 @@
         // 'GeoTIFF'パッケージから 'fromUrl' と 'Pool' 関数をインポート
         const { fromUrl, Pool } = GeoTIFF;
 
-        // 'fast-png'パッケージから'encode'関数をインポートします。これは画像データをPNG形式にエンコードするために使用されます。
+        // 'fast-png'パッケージから'encode'関数をインポート（画像データをPNG形式にエンコードするために使用）
         import { encode as fastPngEncode } from 'https://cdn.jsdelivr.net/npm/fast-png@6.1.0/+esm';
 
         // タイルのx/y/z座標をWebメルカトルの境界ボックスに変換する関数を定義
@@ -118,27 +115,28 @@
         const generateCogSource = async (url, protocolName) => {
             // GeoTIFFから指定されたURLの画像を読み込み
             const tiff = await fromUrl(url);
+            /*
             // GeoTIFF画像から基本的な情報を取得
             const image = await tiff.getImage();
             const bandCount = image.getFileDirectory().SamplesPerPixel;
             console.log('Number of bands: ' + bandCount);
             const bboxTiff = image.getBoundingBox();
+            */
             const pool = new Pool();
             maplibregl.addProtocol(protocolName, (params, callback) => {
                 const segments = params.url.split('/');
-                console.log('segments:' + segments);
+                // console.log('segments:' + segments);
                 // タイルインデックスの取得
                 const [z, x, y] = segments.slice(segments.length - 3).map(Number);
-                console.log('[z, x, y]:' + [z, x, y]);
+                // console.log('[z, x, y]:' + [z, x, y]);
                 // webmercator-bboxを取得
                 const bbox = merc(x, y, z);
-                console.log('bbox:' + bbox)
+                // console.log('bbox:' + bbox)
                 const size = 256;
-                console.log('size:' + size);
                 // GeoTIFFから特定の境界ボックス(bbox)内のラスターデータを読み込み
                 tiff.readRasters({
                     bbox,
-                    samples: [0, 1, 2, 3], // 4つのバンド（赤、緑、青、アルファ）を取得する
+                    samples: [0, 1, 2, 3], // 4つのバンド（赤、緑、青、アルファ）を取得
                     width: size,  // 読み込む画像のサイズを指定
                     height: size, // 読み込む画像のサイズを指定
                     interleave: true, // バンドを交互に読み込む
