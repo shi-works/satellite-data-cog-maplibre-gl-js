@@ -177,7 +177,7 @@
             style: 'https://tile2.openstreetmap.jp/styles/osm-bright/style.json',
             hash: true,
             zoom: 9.94,
-            center: [32.8341, 46.6007],
+            center: [32.8052, 46.5943],
             pitch: 0,
             bearing: 0,
             attributionControl: false,
@@ -186,7 +186,8 @@
         // マップのロードが完了したら、COGソースを生成しレイヤーに追加
         beforeMap.on('load', async () => {
             const { source } = await generateCogSource(
-                './2023-06-01-00_00_2023-06-01-23_59_Landsat_8-9_L1_True_color_-_pansharpened_cog.tif',
+                // './2023-06-01-00_00_2023-06-01-23_59_Landsat_8-9_L1_True_color_-_pansharpened_cog.tif',
+                './2023-06-01-00_00_2023-06-01-23_59_Sentinel-1_AWS-IW-VVVH_Enhanced_visualization_cog.tif',
                 'cog-before'
             );
             beforeMap.addSource('cogSample-before', source);
@@ -225,8 +226,8 @@
             container: 'after',
             style: 'https://tile2.openstreetmap.jp/styles/osm-bright/style.json',
             hash: true,
-            zoom: 17,
-            center: [32.5805265, 46.6190051],
+            zoom: 9.94,
+            center: [32.8052, 46.5943],
             pitch: 0,
             bearing: 0,
             attributionControl: false,
@@ -235,7 +236,8 @@
         // マップのロードが完了したら、COGソースを生成しレイヤーに追加
         afterMap.on('load', async () => {
             const { source } = await generateCogSource(
-                './2023-06-09-00_00_2023-06-09-23_59_Landsat_8-9_L1_True_color_-_pansharpened_cog.tif',
+                // './2023-06-09-00_00_2023-06-09-23_59_Landsat_8-9_L1_True_color_-_pansharpened_cog.tif',
+                './2023-06-09-00_00_2023-06-09-23_59_Sentinel-1_AWS-IW-VVVH_Enhanced_visualization_cog.tif',
                 'cog-after'
             );
             afterMap.addSource('cogSample-after', source);
